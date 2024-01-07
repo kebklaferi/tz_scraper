@@ -10,17 +10,49 @@ const getData = async () => {
             deviceScaleFactor: 1,
         }
     });
-    let reviews = []
+    let reviews = [];
+    let loadReviews = true;
     const page = await browser.newPage();
     try {
-        const hm = await page.goto(url, {
+        await page.goto(url, {
             timeout: 60000,
             waitUntil: 'domcontentloaded'
         });
 
+        const maxScrolls = 10;
+        let scrollCount = 0;
+        let prevHeight = 0;
+        await autoScroll(maxScrolls, scrollCount, prevHeight, page);
         const reviewList = await page.$$("main > div > span.review-panes > div");
-        console.log(reviewList.length)
-        for (const review of reviewList) {
+        console.log("Reviews: ", reviewList.length);
+        await scrape(reviewList, reviews)
+
+    } catch (error) {
+        console.error(error);
+    } finally {
+        await page.close();
+        fs.writeFile('reviews.json', JSON.stringify(reviews), error => {
+            if (error) console.error(error);
+        })
+    }
+    return reviews;
+}
+const autoScroll = async (maxScrolls, scrollCount, prevHeight, page) => {
+    while (scrollCount < maxScrolls) {
+        await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+        await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 1000)));
+        const newHeight = await page.evaluate('document.body.scrollHeight');
+        if (newHeight === prevHeight) {
+            break;
+        }
+        prevHeight = newHeight;
+        scrollCount += 1;
+    }
+}
+
+const scrape = async (reviewList, reviews) => {
+    for (const review of reviewList) {
+        try {
             const textSelector = await review.$("div.trix-content.review-explanation");
             const text = await textSelector.$eval("div", el => el.innerText);
 
@@ -34,14 +66,10 @@ const getData = async () => {
                     reviewText: text.replace(/\n/g, ''),
                 })
             }
+        } catch (error) {
+            console.error(error)
         }
-    } catch (error) {
-        console.error(error);
-    } finally {
-        //await page.close();
     }
-    return reviews;
 }
-
 
 getData().then(reviews => console.log(reviews.length));
