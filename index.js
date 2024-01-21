@@ -1,7 +1,9 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
+const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const url = "https://app.thestorygraph.com/book_reviews/";
-const books = ["2d7248cb-2d7a-4d3e-a45a-d1b995aeaaf8", "8145fb3d-8156-43f9-be7d-f8c656f81a6d"];
+//const booksAll = ["2d7248cb-2d7a-4d3e-a45a-d1b995aeaaf8", "8145fb3d-8156-43f9-be7d-f8c656f81a6d"];
+const books = ["5be514e8-67a5-4010-8a3a-ddd1506e7e2f", "8e34ba9e-26c2-44a0-a02f-85c9cc8d5c05", "9afedc2e-0f24-45ae-bf73-97c95c358031", "47c54fb4-3b3c-436f-9009-40379c4f0b72", "8985f7cc-02f7-4007-ad50-ba555394aa03", "be62d4d7-d09a-459f-8ed5-5fb87c143fed", "d25d4022-4e0d-4989-a498-87affa22b8f1"]
 const countObj = {
     "negativno": 0,
     "nevtralno": 0,
@@ -21,6 +23,14 @@ const getData = async () => {
         countObj.nevtralno = 0;
         countObj.pozitivno = 0;
         countObj.negativno = 0;
+        const csvWriter = createCsvWriter({
+            path: book + 'reviews.csv',
+            header: [
+                {id: 'ratingNumber', title: 'Number'},
+                {id: 'reviewText', title: 'Review'},
+                {id: 'rating', title: 'Rating'},
+            ]
+        });
         const page = await browser.newPage();
         try {
             await page.goto(url + book + "?written_explanations_only=true", {
@@ -28,7 +38,7 @@ const getData = async () => {
                 waitUntil: 'domcontentloaded'
             });
 
-            const maxScrolls = 10;
+            const maxScrolls = 5;
             let scrollCount = 0;
             let prevHeight = 0;
             await autoScroll(maxScrolls, scrollCount, prevHeight, page);
@@ -43,9 +53,13 @@ const getData = async () => {
             console.error(error);
         } finally {
             await page.close();
-            fs.writeFile(book + 'reviews.json', JSON.stringify(reviews), error => {
+            /*fs.writeFile(book + 'reviews.json', JSON.stringify(reviews), error => {
                 if (error) console.error(error);
             })
+             */
+            csvWriter.writeRecords(reviews).then( () => {
+                console.log("end")
+            }).catch(err => {})
         }
     }
     return ({browser});
@@ -66,8 +80,14 @@ const autoScroll = async (maxScrolls, scrollCount, prevHeight, page) => {
 const scrape = async (reviewList, reviews) => {
     for (const review of reviewList) {
         try {
+
             const textSelector = await review.$("div.trix-content.review-explanation");
-            const text = await textSelector.$eval("div", el => el.innerText);
+            //const text = await textSelector.$eval("div", el => el.innerText);
+            const text = await review.$eval("div.trix-content.review-explanation", el => el.innerText);
+
+            //console.log(textSelector)
+            //const text = await textSelector[0].innerText;
+            console.log(text)
 
             const paragraphSelectors = await review.$$("p.mb-2");
             const ratingSelector = paragraphSelectors[paragraphSelectors.length - 1];
@@ -75,13 +95,13 @@ const scrape = async (reviewList, reviews) => {
             let reviewText = refactorText(text);
             if (rating !== "Go to review page" && reviewText.length > 5) {
                 reviews.push({
-                    ratingNumber: rating,
+                    ratingNumber: parseInt(rating),
                     reviewText: reviewText,
                     rating: ratingEval(rating)
                 })
             }
         } catch (error) {
-           // console.error(error)
+           console.error(error)
         }
     }
 }
@@ -98,9 +118,6 @@ const ratingEval = (rating) => {
         countObj.pozitivno++;
         return "POZITIVNO";
     }
-    //nevtralno 2,5 - 3,5
-    // pozitivno 3,5 -> 5
-    // negativno 0-2
 }
 
 getData().then(
