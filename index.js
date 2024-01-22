@@ -106,10 +106,10 @@ const scrape = async (reviewList, reviews) => {
 
 const ratingEval = (rating) => {
     const tmp = parseFloat(rating);
-    if(rating < 2.5){
+    if(tmp < 2.5){
         countObj.negativno++;
         return "NEGATIVNO";
-    } else if (rating < 4){
+    } else if (tmp < 4){
         countObj.nevtralno++;
         return "NEVTRALNO";
     } else {
